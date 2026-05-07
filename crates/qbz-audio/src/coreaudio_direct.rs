@@ -307,12 +307,21 @@ pub struct CoreAudioExclusiveGuard {
 
 #[cfg(target_os = "macos")]
 impl CoreAudioExclusiveGuard {
+    /// Acquire CoreAudio Hog Mode for the given device.
+    ///
+    /// The guard is constructed *before* the FFI call so that any
+    /// partial-acquire failure (e.g. CoreAudio transfers ownership to
+    /// us but the readback fails) still triggers `Drop`, which calls
+    /// `set_hog_mode(false)`. That release is a no-op when we don't
+    /// actually own the device, so it's safe in either outcome and
+    /// avoids leaving the device hogged on error.
     pub fn acquire(device_id: AudioDeviceID) -> Result<Self, String> {
-        set_hog_mode(device_id, true)?;
-        Ok(Self {
+        let guard = Self {
             device_id,
             active: true,
-        })
+        };
+        set_hog_mode(device_id, true)?;
+        Ok(guard)
     }
 
     pub fn release(&mut self) -> Result<(), String> {
