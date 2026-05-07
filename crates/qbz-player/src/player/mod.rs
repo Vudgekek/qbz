@@ -1067,6 +1067,22 @@ impl Player {
                                 return Some(stream_type);
                             }
                             Some(Err(e)) => {
+                                // On macOS, the backend path is the only one that
+                                // honors Exclusive Mode (CoreAudio Hog Mode). Falling
+                                // through to legacy CPAL here would silently create a
+                                // shared-mode stream while the UI still shows
+                                // Exclusive — surface the failure instead so the
+                                // user sees that audio is unavailable rather than
+                                // unknowingly playing in shared mode.
+                                #[cfg(target_os = "macos")]
+                                if settings.exclusive_mode {
+                                    log::error!(
+                                        "macOS Exclusive Mode init failed: {} — refusing to fall back to shared CPAL",
+                                        e
+                                    );
+                                    state.set_current_device(None);
+                                    return None;
+                                }
                                 log::warn!(
                                     "Backend system init failed: {}, falling back to legacy",
                                     e
